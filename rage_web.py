@@ -42,6 +42,7 @@ MODULE_LABELS = {
     "integrity": "SRI / supply chain (A03/A08)",
     "sqlmap": "sqlmap confirm (A05)", "nuclei": "nuclei templates",
     "tlsaudit": "TLS audit — sslyze/testssl (A04)",
+    "openapi": "OpenAPI endpoint fuzzing (A05)",
 }
 
 PAGE = """<!doctype html>

@@ -1163,15 +1163,191 @@ def module_tlsaudit(report: Report, base_url: str) -> None:
 
 
 # =========================================================================== #
+# A05 — OpenAPI/Swagger-driven API endpoint fuzzing
+# =========================================================================== #
+#
+# Crawling only sees HTML links/forms, so API-first apps (FastAPI, etc.) look
+# "clean" because nothing got tested. If the app publishes an OpenAPI/Swagger
+# spec, this module reads it, enumerates the documented endpoints + parameters,
+# and runs injection probes against them. NOTE: for write methods (POST/PUT/
+# PATCH) this sends real requests that can create/modify data — intended for
+# authorized/idle test environments. DELETE is never exercised.
+
+OPENAPI_PATHS = ["/openapi.json", "/api/openapi.json", "/v3/api-docs", "/swagger.json",
+                 "/swagger/v1/swagger.json", "/api-docs", "/openapi"]
+_OAPI_SAMPLE = "1"
+_OAPI_ERR = "rage'\")(]};--"
+_OAPI_TRAVERSAL = "../../../../../../etc/passwd"
+
+
+def _oapi_snip(body: str, rx) -> str:
+    m = rx.search(body)
+    return body[max(0, m.start() - 30):m.end() + 40] if m else ""
+
+
+def _oapi_resolve_ref(spec: dict, node, _depth: int = 0):
+    while isinstance(node, dict) and "$ref" in node and _depth < 10:
+        ref = node["$ref"]
+        _depth += 1
+        if not isinstance(ref, str) or not ref.startswith("#/"):
+            return {}
+        cur = spec
+        for part in ref[2:].split("/"):
+            if isinstance(cur, dict) and part in cur:
+                cur = cur[part]
+            else:
+                return {}
+        node = cur
+    return node if isinstance(node, dict) else {}
+
+
+def _oapi_string_fields(spec: dict, schema, _depth: int = 0) -> list[str]:
+    schema = _oapi_resolve_ref(spec, schema or {})
+    if _depth > 4 or not isinstance(schema, dict):
+        return []
+    props = schema.get("properties") or {}
+    out = []
+    for name, sub in props.items():
+        sub = _oapi_resolve_ref(spec, sub)
+        if sub.get("type") in (None, "string"):
+            out.append(name)
+    return out
+
+
+def _oapi_load(http: Http, base_url: str, spec_url: str | None):
+    candidates = [spec_url] if spec_url else [urllib.parse.urljoin(base_url, p) for p in OPENAPI_PATHS]
+    for u in candidates:
+        if not u:
+            continue
+        r = http.request(u)
+        if r and r.status == 200 and r.body.lstrip().startswith("{"):
+            try:
+                data = json.loads(r.body)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict) and ("openapi" in data or "swagger" in data) and data.get("paths"):
+                return data, u
+    return None, None
+
+
+def _oapi_base(spec: dict, base_url: str) -> str:
+    pr = urllib.parse.urlparse(base_url)
+    root = f"{pr.scheme}://{pr.netloc}"
+    servers = spec.get("servers") or []
+    if isinstance(servers, list) and servers:
+        su = (servers[0] or {}).get("url", "")
+        if su.startswith("http"):
+            return su.rstrip("/")
+        if su.startswith("/"):
+            return root + su.rstrip("/")
+    if spec.get("basePath"):
+        return root + str(spec["basePath"]).rstrip("/")
+    return root
+
+
+def _oapi_endpoints(spec: dict, base_url: str, cap: int = 80) -> list[dict]:
+    base = _oapi_base(spec, base_url)
+    out: list[dict] = []
+    for path, item in (spec.get("paths") or {}).items():
+        if not isinstance(item, dict):
+            continue
+        for method, op in item.items():
+            if method.lower() not in ("get", "post", "put", "patch") or not isinstance(op, dict):
+                continue
+            concrete = re.sub(r"\{[^}]+\}", _OAPI_SAMPLE, path)
+            url = base + (concrete if concrete.startswith("/") else "/" + concrete)
+            query = [_oapi_resolve_ref(spec, p).get("name") for p in (op.get("parameters") or [])
+                     if _oapi_resolve_ref(spec, p).get("in") == "query" and _oapi_resolve_ref(spec, p).get("name")]
+            rb = _oapi_resolve_ref(spec, op.get("requestBody") or {})
+            schema = ((rb.get("content") or {}).get("application/json") or {}).get("schema")
+            body = _oapi_string_fields(spec, schema) if schema else []
+            out.append({"method": method.upper(), "url": url, "path": path, "query": query, "body": body})
+            if len(out) >= cap:
+                return out
+    return out
+
+
+def _oapi_request(http: Http, e: dict, params: dict | None = None, body: dict | None = None):
+    url = e["url"]
+    if params:
+        sep = "&" if urllib.parse.urlparse(url).query else "?"
+        url = url + sep + urllib.parse.urlencode(params)
+    data = headers = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers = {"Content-Type": "application/json"}
+    return http.request(url, method=e["method"], data=data, headers=headers, allow_redirects=False)
+
+
+def _oapi_probe(http: Http, report: Report, e: dict, where: str, loc: str,
+                mk, time_based: bool) -> None:
+    """mk(payload) -> (params, body) builder for either a query param or a body field."""
+    r = _oapi_request(http, e, *mk(_OAPI_ERR))
+    if r and SQL_ERR_RE.search(r.body):
+        report.add(Finding("openapi", "high", f"SQL error via API {where}",
+                           "Injection probe elicited a database error.", loc, _oapi_snip(r.body, SQL_ERR_RE), "A05"))
+        return
+    if r and INJERR_RE.search(r.body):
+        report.add(Finding("openapi", "medium", f"Backend parser error via API {where}",
+                           "NoSQL/LDAP/XPath/XML error elicited.", loc, _oapi_snip(r.body, INJERR_RE), "A05"))
+    r = _oapi_request(http, e, *mk(XSS_PAYLOAD))
+    if r and f"<{XSS_MARKER}>" in r.body:
+        report.add(Finding("openapi", "high", f"Reflected XSS via API {where}",
+                           "Payload reflected unencoded (confirm rendering sink).", loc, XSS_PAYLOAD, "A05"))
+    r = _oapi_request(http, e, *mk(SSTI_PAYLOAD))
+    if r and "rage49" in r.body and "{{7*7}}" not in r.body:
+        report.add(Finding("openapi", "high", f"Server-Side Template Injection via API {where}",
+                           "Template expression evaluated (7*7 -> 49).", loc, "rage49", "A05"))
+    r = _oapi_request(http, e, *mk(_OAPI_TRAVERSAL))
+    if r and TRAVERSAL_SIGS.search(r.body):
+        report.add(Finding("openapi", "high", f"Path traversal via API {where}",
+                           "OS file contents returned.", loc, _oapi_snip(r.body, TRAVERSAL_SIGS), "A05"))
+    if time_based:
+        r = _oapi_request(http, e, *mk("1' AND SLEEP(5)-- -"))
+        if r and r.elapsed >= 4.5:
+            report.add(Finding("openapi", "high", f"Time-based SQLi via API {where} (likely)",
+                               f"Injected SLEEP(5) delayed response to {r.elapsed:.1f}s.", loc, owasp="A05"))
+
+
+def module_openapi(http: Http, report: Report, base_url: str,
+                   time_based: bool = False, spec_url: str | None = None) -> None:
+    spec, url = _oapi_load(http, base_url, spec_url)
+    if not spec:
+        report.add(Finding("openapi", "info", "No OpenAPI/Swagger spec found",
+                           "Tried common spec paths; nothing parseable. Point rage at it with --openapi-spec.",
+                           base_url, owasp="A05"))
+        return
+    eps = _oapi_endpoints(spec, base_url)
+    nq = sum(1 for e in eps if e["query"])
+    nb = sum(1 for e in eps if e["body"])
+    report.add(Finding("openapi", "info", "OpenAPI spec parsed — testing documented endpoints",
+                       f"{len(eps)} endpoint(s) from {url} ({nq} with query params, {nb} with a JSON body). "
+                       "Write methods (POST/PUT/PATCH) were exercised; DELETE was skipped.", url, owasp="A05"))
+    for e in eps:
+        for param in e["query"]:
+            _oapi_probe(http, report, e, "query param",
+                        f"{e['method']} {e['path']} [query={param}]",
+                        lambda payload, _p=param: ({_p: payload}, None), time_based)
+        if e["body"]:
+            for fieldname in e["body"]:
+                def _mk(payload, _f=fieldname, _e=e):
+                    b = {bf: "rage1" for bf in _e["body"]}
+                    b[_f] = payload
+                    return (None, b)
+                _oapi_probe(http, report, e, "JSON body field",
+                            f"{e['method']} {e['path']} [body={fieldname}]", _mk, time_based)
+
+
+# =========================================================================== #
 # Orchestration + CLI
 # =========================================================================== #
 
 ALL_MODULES = ["headers", "misconfig", "files", "secrets", "ports", "tls", "ciphers", "mixed",
                "cors", "methods", "redirect", "ssrf", "traversal", "sqli", "xss", "ssti", "cmdi",
                "crlf", "injerr", "csrf", "jwt", "auth", "authactive", "fingerprint", "integrity",
-               "sqlmap", "nuclei", "tlsaudit"]
-# "all" runs the built-in checks; sqlmap/nuclei/tlsaudit are opt-in (heavy/external) via -m or flags.
-DEFAULT_ALL = [m for m in ALL_MODULES if m not in ("sqlmap", "nuclei", "tlsaudit")]
+               "sqlmap", "nuclei", "tlsaudit", "openapi"]
+# "all" runs the built-in checks; sqlmap/nuclei/tlsaudit/openapi are opt-in (heavy/active) via -m or flags.
+DEFAULT_ALL = [m for m in ALL_MODULES if m not in ("sqlmap", "nuclei", "tlsaudit", "openapi")]
 CRAWL_MODULES = {"misconfig", "secrets", "mixed", "redirect", "ssrf", "traversal", "sqli", "xss",
                  "ssti", "cmdi", "crlf", "injerr", "csrf", "jwt", "auth", "authactive",
                  "fingerprint", "integrity", "sqlmap"}
@@ -1205,6 +1381,7 @@ CLEAN_DESCRIPTIONS = {
     "sqlmap": "sqlmap: no SQL injection confirmed on tested URLs",
     "nuclei": "nuclei: no template matches",
     "tlsaudit": "tlsaudit: no weak protocols/ciphers found by the TLS engine",
+    "openapi": "openapi: no injection found in documented API endpoints (or no spec exposed)",
 }
 
 
@@ -1244,6 +1421,8 @@ def run(args: argparse.Namespace) -> Report:
         modules.append("nuclei")
     if getattr(args, "tls_audit", False) and "tlsaudit" not in modules:
         modules.append("tlsaudit")
+    if getattr(args, "openapi", False) and "openapi" not in modules:
+        modules.append("openapi")
     oob = getattr(args, "oob", None)
     active_auth = getattr(args, "active_auth", False)
     headless = getattr(args, "headless", False)
@@ -1299,6 +1478,8 @@ def run(args: argparse.Namespace) -> Report:
         ("sqlmap", lambda: module_sqlmap(report, param_urls, getattr(args, "cookie", None))),
         ("nuclei", lambda: module_nuclei(report, base_url)),
         ("tlsaudit", lambda: module_tlsaudit(report, base_url)),
+        ("openapi", lambda: module_openapi(http, report, base_url, args.time_based,
+                                           getattr(args, "openapi_spec", None))),
     ]
     real = {"critical", "high", "medium", "low"}
     for name, fn in steps:
@@ -1374,6 +1555,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nuclei", action="store_true", help="Run the nuclei template engine (must be on PATH).")
     p.add_argument("--tls-audit", action="store_true", dest="tls_audit",
                    help="Trustworthy TLS/cipher audit via sslyze or testssl.sh (own cipher stack).")
+    p.add_argument("--openapi", action="store_true",
+                   help="Read the target's OpenAPI/Swagger spec and fuzz the documented API endpoints.")
+    p.add_argument("--openapi-spec", metavar="URL", dest="openapi_spec",
+                   help="Explicit OpenAPI/Swagger JSON URL (else common paths are tried).")
     p.add_argument("--cookie", metavar="STR", help="Cookie header for authenticated scanning, e.g. 'session=abc'.")
     p.add_argument("--header", action="append", metavar="H",
                    help="Extra request header 'Name: Value' (repeatable), e.g. 'Authorization: Bearer ...'.")

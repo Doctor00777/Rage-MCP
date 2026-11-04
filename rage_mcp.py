@@ -66,7 +66,8 @@ def _tool_status_impl() -> dict:
 
 def _scan_impl(target: str, authorized: bool, modules: list[str] | None,
                time_based: bool, active_auth: bool, headless: bool,
-               sqlmap: bool, nuclei: bool, tls_audit: bool, oob: str | None,
+               sqlmap: bool, nuclei: bool, tls_audit: bool,
+               openapi: bool, openapi_spec: str | None, oob: str | None,
                cookie: str | None, headers: list[str] | None,
                login_url: str | None, login_data: str | None,
                delay: float, max_pages: int) -> dict:
@@ -78,6 +79,7 @@ def _scan_impl(target: str, authorized: bool, modules: list[str] | None,
         time_based=time_based, active_auth=active_auth, oob=oob,
         cookie=cookie, header=headers or [], login_url=login_url, login_data=login_data,
         headless=headless, sqlmap=sqlmap, nuclei=nuclei, tls_audit=tls_audit,
+        openapi=openapi, openapi_spec=openapi_spec,
         max_pages=max_pages, max_requests=6000, delay=delay,
         timeout=12.0, port_timeout=2.0, insecure=False, json=None,
     )
@@ -115,6 +117,7 @@ def tool_status() -> dict:
 def scan(target: str, authorized: bool = False, modules: list[str] | None = None,
          time_based: bool = False, active_auth: bool = False, headless: bool = False,
          sqlmap: bool = False, nuclei: bool = False, tls_audit: bool = False,
+         openapi: bool = False, openapi_spec: str | None = None,
          oob: str | None = None, cookie: str | None = None,
          headers: list[str] | None = None, login_url: str | None = None,
          login_data: str | None = None, delay: float = 0.3, max_pages: int = 25) -> dict:
@@ -127,8 +130,8 @@ def scan(target: str, authorized: bool = False, modules: list[str] | None = None
     Returns {target, counts, findings[], checks_clean[]}. Heuristic findings need manual review.
     """
     return _scan_impl(target, authorized, modules, time_based, active_auth, headless,
-                      sqlmap, nuclei, tls_audit, oob, cookie, headers, login_url,
-                      login_data, delay, max_pages)
+                      sqlmap, nuclei, tls_audit, openapi, openapi_spec, oob, cookie, headers,
+                      login_url, login_data, delay, max_pages)
 
 
 if __name__ == "__main__":
