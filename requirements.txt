@@ -1,0 +1,12 @@
+# Optional dependencies for Rage MCP.
+# The core scanner (rage.py / rage_web.py) runs on the Python 3.9+ standard library
+# alone — you only need these for the extra capabilities noted below.
+
+mcp<2         # AI-driven MCP server (rage_mcp.py). FastMCP API; pin <2.
+playwright    # headless JS/SPA crawl (after install, run: playwright install chromium)
+sslyze        # trustworthy TLS / cipher audit (best on Linux/WSL; needs prebuilt wheels)
+
+# Not pip-installable — install separately and put on PATH if you want them:
+#   nuclei      https://github.com/projectdiscovery/nuclei
+#   sqlmap      https://sqlmap.org
+#   testssl.sh  https://github.com/testssl/testssl.sh

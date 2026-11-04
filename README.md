@@ -34,12 +34,15 @@ nothing (labelled *not proof of absence*) and the categories that need manual re
 ## Install
 
 ```bash
-# core: no dependencies beyond Python 3.9+
-# optional engines:
-pip install "mcp<2"        # MCP server
-pip install playwright && playwright install chromium   # headless (JS/SPA) crawl
-pip install sslyze         # TLS audit (Linux/WSL; needs prebuilt wheels)
-# plus on PATH if you want them: nuclei, sqlmap, testssl.sh
+git clone https://github.com/Doctor00777/Rage-MCP.git
+cd Rage-MCP
+
+# The core scanner (rage.py) needs nothing beyond Python 3.9+.
+# Optional engines (MCP server, headless crawl, TLS audit):
+pip install -r requirements.txt
+playwright install chromium       # only if you want the headless (JS/SPA) crawl
+
+# External binaries, optional, must be on PATH: nuclei, sqlmap, testssl.sh
 ```
 
 ## Usage
