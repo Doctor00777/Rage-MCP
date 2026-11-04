@@ -1,85 +1,173 @@
-# Rage MCP
+<p align="center">
+  <img src="assets/banner.svg" alt="Rage MCP — Authorized Web-Security Recon Scanner" width="100%">
+</p>
 
-**rage** is an authorized-only web-security recon scanner, mapped to the OWASP Top 10 (2026),
-with three ways to run it:
+<p align="center">
+  <b>rage</b> is an authorized-only web-security recon scanner — mapped to the OWASP Top 10 (2026),
+  runnable from the <b>command line</b>, a <b>local web UI</b>, or as an <b>MCP server</b> an AI agent can drive.
+</p>
 
-- **CLI** — `py rage.py <target> --authorized`
-- **Web UI** — `py rage_web.py` → http://127.0.0.1:8787
-- **MCP server** — `py rage_mcp.py` lets an AI agent (Claude Desktop, Cursor, Claude Code, any
-  MCP client) drive the scanner as tools (`scan`, `list_modules`, `tool_status`).
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/license-MIT-22c55e" alt="MIT License">
+  <img src="https://img.shields.io/badge/OWASP-Top%2010%20(2026)-f59e0b" alt="OWASP Top 10 2026">
+  <img src="https://img.shields.io/badge/MCP-native-8b5cf6" alt="MCP native">
+  <img src="https://img.shields.io/badge/deps-stdlib%20core-0ea5e9" alt="stdlib core">
+  <img src="https://img.shields.io/github/stars/Doctor00777/Rage-MCP?style=social" alt="GitHub stars">
+</p>
 
-Detection, not exploitation. Stdlib-only core (Python 3.9+); the heavy engines are optional.
+<p align="center">
+  <a href="#-what-rage-does">What it does</a> ·
+  <a href="#-how-it-works">How it works</a> ·
+  <a href="#-three-ways-to-run-it">Run it</a> ·
+  <a href="#-mcp-ai-driven">MCP</a> ·
+  <a href="#-owasp-coverage">Coverage</a> ·
+  <a href="#-install">Install</a> ·
+  <a href="#️-responsible-use">Responsible use</a> ·
+  <a href="#-honest-limits">Limits</a>
+</p>
 
-> ⚠️ **Use only on systems you own or are explicitly authorized to test.** Every entry point
-> requires an explicit authorization flag. Unauthorized scanning is illegal in most places.
+> ⚠️ **Authorized testing only.** rage is for systems you own or have explicit written permission to
+> test. Every entry point requires an explicit authorization flag. Unauthorized scanning is illegal
+> in most jurisdictions.
 
-## What it checks (OWASP Top 10 2026)
+---
 
-| OWASP 2026 | Covered by |
-|---|---|
-| A01 Broken Access Control (+SSRF) | CORS, HTTP methods/TRACE, open redirect, SSRF candidates, path traversal, CSRF, unauth paths |
-| A02 Security Misconfiguration | headers, cookie flags, version leak, dir listing, backup/API-doc/GraphQL discovery, secrets, ports |
-| A03 Supply Chain | tech/CMS fingerprint, subdomain-takeover signatures, outdated JS libs |
-| A04 Cryptographic Failures | TLS version/downgrade, cert expiry, HSTS, weak ciphers, mixed content, sensitive data in URL |
-| A05 Injection | SQLi, XSS, SSTI, command injection, CRLF/host-header, NoSQL/LDAP/XPath |
-| A06 Insecure Design | reported as manual-review (not black-box testable) |
-| A07 Authentication Failures | JWT flaws, token entropy, password-over-HTTP, login rate-limit/enum (opt-in) |
-| A08 Data Integrity | missing Subresource Integrity |
-| A09 Logging & Alerting | reported as manual-review |
-| A10 Exceptional Conditions | verbose error / stack-trace disclosure |
+## 🔎 What rage does
 
-Findings are tagged with their OWASP ID; the report also lists checks that ran and found
-nothing (labelled *not proof of absence*) and the categories that need manual review.
+Point rage at a web target you're allowed to test and it runs **25+ checks** across the whole OWASP
+Top 10 (2026), returns findings **ranked by severity and tagged with their OWASP category**, and —
+unlike most scanners — it **also lists the checks that found nothing** (clearly labelled *not proof
+of absence*) and the categories that genuinely need a human.
 
-## Install
+- 🧭 **OWASP-mapped** — every finding carries its `A01`–`A10` tag.
+- 🤖 **MCP-native** — an AI agent (Claude Desktop, Cursor, Claude Code) can orchestrate it as tools.
+- 🧰 **Optional power tools** — plugs into `nuclei`, `sqlmap`, `sslyze`/`testssl.sh`, and a headless
+  Playwright crawler when present; degrades gracefully when they're not.
+- 🔐 **Authenticated scans** — cookie, bearer header, or an automatic login POST to test behind the wall.
+- 🧵 **Honest by design** — detection over exploitation, heuristics labelled as such, no mass-targeting.
+
+## 🏗 How it works
+
+```mermaid
+flowchart LR
+  U["You — CLI / Web UI"] --> E
+  A["AI agent<br/>Claude · Cursor · Claude Code"] -- MCP --> M["rage_mcp.py"]
+  M --> E["rage engine<br/>25+ OWASP checks"]
+  E -. optional .-> X["nuclei · sqlmap<br/>sslyze/testssl · Playwright"]
+  E --> T["🎯 Authorized target"]
+  E --> R["📋 OWASP-tagged report<br/>+ checks-that-found-nothing"]
+```
+
+The LLM decides *what* to run; rage provides the tools and does the work — the same "AI orchestrates
+the toolbox" idea as the big frameworks, scoped to **authorized, human-in-the-loop** testing.
+
+## 🚀 Three ways to run it
+
+```bash
+# 1) CLI
+py rage.py https://beta.example.com --authorized
+
+# 2) Local web UI  → http://127.0.0.1:8787
+py rage_web.py
+
+# 3) MCP server (an AI agent drives it)
+py rage_mcp.py
+```
+
+Common options:
+
+```bash
+py rage.py <target> --authorized --headless --nuclei --sqlmap --time-based   # go deep
+py rage.py <target> --authorized --cookie "session=..."                      # authenticated
+py rage.py <target> --authorized -m headers tls cors sqli xss                # pick modules
+py rage.py <target> --authorized --json report.json                          # machine-readable
+```
+
+## 🤖 MCP (AI-driven)
+
+Start the server and wire it into any MCP client:
+
+```bash
+py rage_mcp.py
+```
+
+**Claude Desktop** — `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rage": { "command": "py", "args": ["/absolute/path/to/Rage-MCP/rage_mcp.py"] }
+  }
+}
+```
+
+Then just ask: *“scan https://my-authorized-host with rage.”* Tools exposed:
+
+| Tool | What it does |
+|------|--------------|
+| `scan` | Run an authorized scan of one target → OWASP-tagged findings + checks-that-found-nothing. Refuses unless `authorized=true`. |
+| `list_modules` | The full menu of checks, which run by default, which are opt-in, and the OWASP map. |
+| `tool_status` | Which optional engines are available on this host (nuclei / sqlmap / TLS engine / headless). |
+
+## 🛡 OWASP coverage
+
+| OWASP 2026 | Modules | What it checks |
+|---|---|---|
+| **A01** Broken Access Control (+SSRF) | `cors` `methods` `redirect` `ssrf` `traversal` `csrf` `auth` | CORS reflection, risky methods/TRACE, open redirect, SSRF candidates + cloud-metadata, path traversal/LFI, missing CSRF tokens, unauth sensitive paths |
+| **A02** Security Misconfiguration | `headers` `misconfig` `files` `secrets` `ports` | headers, cookie flags, version leak, directory listing, verbose errors, backup/API-doc/GraphQL discovery, secrets in source, risky ports |
+| **A03** Supply Chain | `fingerprint` `integrity` | tech/CMS fingerprint, EOL software, subdomain-takeover signatures, outdated JS libs |
+| **A04** Cryptographic Failures | `tls` `ciphers` `mixed` `tlsaudit` | TLS version/downgrade, cert expiry, HSTS, cleartext, weak ciphers, mixed content, sensitive data in URL |
+| **A05** Injection | `sqli` `xss` `ssti` `cmdi` `crlf` `injerr` `sqlmap` | SQLi, XSS, SSTI, command injection, CRLF/host-header, NoSQL/LDAP/XPath, sqlmap confirmation |
+| **A06** Insecure Design | — | reported as manual-review (threat modeling / business logic) |
+| **A07** Authentication Failures | `jwt` `auth` `authactive` | JWT alg=none/weak, token entropy, password-over-HTTP, login rate-limit & enumeration (opt-in) |
+| **A08** Data Integrity | `integrity` | missing Subresource Integrity |
+| **A09** Logging & Alerting | — | reported as manual-review (needs backend/SIEM) |
+| **A10** Exceptional Conditions | `misconfig` | verbose error / stack-trace disclosure |
+| — | `nuclei` | run the nuclei template engine and fold results in |
+
+Heavy/intrusive modules (`sqlmap`, `nuclei`, `tlsaudit`, time-based & active-auth probes) are **opt-in**.
+
+## 📦 Install
 
 ```bash
 git clone https://github.com/Doctor00777/Rage-MCP.git
 cd Rage-MCP
 
-# The core scanner (rage.py) needs nothing beyond Python 3.9+.
-# Optional engines (MCP server, headless crawl, TLS audit):
-pip install -r requirements.txt
-playwright install chromium       # only if you want the headless (JS/SPA) crawl
+# The core scanner needs nothing beyond Python 3.9+.
+# Optional engines:
+pip install -r requirements.txt       # mcp, playwright, sslyze
+playwright install chromium           # only for the headless (JS/SPA) crawl
 
-# External binaries, optional, must be on PATH: nuclei, sqlmap, testssl.sh
+# External binaries, optional, on PATH: nuclei · sqlmap · testssl.sh
 ```
 
-## Usage
+## ⚖️ Responsible use
 
-```bash
-py rage.py https://beta.example.com --authorized
-py rage.py https://beta.example.com --authorized --headless --nuclei --sqlmap --time-based
-py rage.py https://beta.example.com --authorized --cookie "session=..."   # authenticated
-py rage.py https://beta.example.com --authorized --json report.json
-```
+rage can send active, intrusive traffic (injection probes, sqlmap, nuclei). Use it **only** on:
 
-### MCP (AI-driven)
+- systems you own, or
+- a target you have **explicit written authorization** to test (engagement/scope, bug-bounty program).
 
-```bash
-py rage_mcp.py            # stdio MCP server
-```
+The `--authorized` flag / `authorized=true` is your attestation — it is **not** permission. rage keeps
+to **single-target, detection-first, human-in-the-loop** testing: it proves a bug exists, it doesn't
+exploit it, brute-force credentials, or mass-target.
 
-Claude Desktop (`claude_desktop_config.json`):
+## 🔭 Honest limits
 
-```json
-{
-  "mcpServers": {
-    "rage": { "command": "py", "args": ["C:/path/to/Rage-MCP/rage_mcp.py"] }
-  }
-}
-```
-
-Then ask the agent: *"scan https://my-authorized-host with rage."*
-
-## Honest limits
-
-- A clean report is **not** proof of security — it's a strong first pass. Real assurance needs a
-  manual pentest plus source/SCA review.
-- Heuristic findings (labelled *likely* / *candidate*) must be confirmed manually.
-- The full external-tool arsenal (and sslyze/testssl) is Linux-first; run under **WSL/Linux** for
+- A clean report is **not proof of security** — it's a strong first pass. Real assurance needs a manual
+  pentest plus source/SCA review.
+- Findings labelled *likely* / *candidate* are heuristics — **confirm them manually**.
+- The full external-tool power (and `sslyze`/`testssl.sh`) is Linux-first; run under **WSL/Linux** for
   best coverage.
+- Categories A06/A09 and IDOR/BOLA/privilege-escalation need authenticated, multi-account, human testing.
 
-## License
+## 🤝 Contributing
+
+Issues and PRs welcome — new checks, better engine integrations, and false-positive fixes especially.
+Keep the core dependency-free where possible, tag findings with their OWASP ID, and never weaken the
+authorization gate.
+
+## 📄 License
 
 MIT — see [LICENSE](LICENSE).
