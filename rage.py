@@ -764,11 +764,17 @@ XSS_MARKER = "xSs9z1Qk"
 XSS_PAYLOAD = f"<{XSS_MARKER}>\"'"
 
 
+def _is_html(r) -> bool:
+    """A reflected marker is only XSS if the response is rendered as HTML.
+    JSON APIs that echo input (e.g. FastAPI 422 validation errors) are NOT XSS."""
+    return bool(r) and "html" in (r.headers.get("content-type", "") or "").lower()
+
+
 def module_xss(http: Http, report: Report, param_urls: list[str], forms: list[Form]) -> None:
     for url in param_urls:
         for param in _params_of(url):
             r = http.request(_mutate_query(url, param, XSS_PAYLOAD))
-            if r and f"<{XSS_MARKER}>" in r.body:
+            if _is_html(r) and f"<{XSS_MARKER}>" in r.body:
                 report.add(Finding("xss", "high", "Reflected XSS (unescaped marker)",
                                    f"Payload reflected unencoded for param {param!r}.",
                                    f"{url} [param={param}]", XSS_PAYLOAD, "A05"))
@@ -787,7 +793,7 @@ def module_xss(http: Http, report: Report, param_urls: list[str], forms: list[Fo
         else:
             sep = "&" if urllib.parse.urlparse(form.action).query else "?"
             r = http.request(form.action + sep + urllib.parse.urlencode(data))
-        if r and f"<{XSS_MARKER}>" in r.body:
+        if _is_html(r) and f"<{XSS_MARKER}>" in r.body:
             report.add(Finding("xss", "high", "Reflected XSS via form",
                                "Form input reflected without encoding.", form.action, XSS_PAYLOAD, "A05"))
 
@@ -1291,7 +1297,7 @@ def _oapi_probe(http: Http, report: Report, e: dict, where: str, loc: str,
         report.add(Finding("openapi", "medium", f"Backend parser error via API {where}",
                            "NoSQL/LDAP/XPath/XML error elicited.", loc, _oapi_snip(r.body, INJERR_RE), "A05"))
     r = _oapi_request(http, e, *mk(XSS_PAYLOAD))
-    if r and f"<{XSS_MARKER}>" in r.body:
+    if f"<{XSS_MARKER}>" in (r.body if r else "") and _is_html(r):
         report.add(Finding("openapi", "high", f"Reflected XSS via API {where}",
                            "Payload reflected unencoded (confirm rendering sink).", loc, XSS_PAYLOAD, "A05"))
     r = _oapi_request(http, e, *mk(SSTI_PAYLOAD))
