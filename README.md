@@ -78,7 +78,8 @@ py rage_mcp.py
 Common options:
 
 ```bash
-py rage.py <target> --authorized --headless --nuclei --sqlmap --time-based   # go deep
+py rage.py <target> --authorized --thorough                                  # lean on every engine
+py rage.py <target> --authorized --headless --nuclei --sqlmap --time-based   # go deep (pick engines)
 py rage.py <target> --authorized --cookie "session=..."                      # authenticated
 py rage.py <target> --authorized -m headers tls cors sqli xss                # pick modules
 py rage.py <target> --authorized --json report.json                          # machine-readable
@@ -127,6 +128,22 @@ Then just ask: *“scan https://my-authorized-host with rage.”* Tools exposed:
 | — | `nuclei` | run the nuclei template engine and fold results in |
 
 Heavy/intrusive modules (`sqlmap`, `nuclei`, `tlsaudit`, time-based & active-auth probes) are **opt-in**.
+
+### Engines do the hard detection
+
+rage keeps its own built-in modules to cheap, stable checks and defers the noisy,
+easy-to-get-wrong detection to purpose-built engines maintained elsewhere:
+
+| Dimension | Authoritative engine | rage's built-in role |
+|---|---|---|
+| SQL injection | `sqlmap` | quick error/boolean heuristic → confirm with `--sqlmap` |
+| Known CVEs / templates | `nuclei` | — (enable with `--nuclei`) |
+| TLS protocols & ciphers | `sslyze` / `testssl.sh` | limited probe, **superseded** when `--tls-audit` runs |
+
+`--thorough` turns all of these on at once (plus a headless crawl and OpenAPI
+fuzzing). When the TLS engine is active, the built-in `ciphers` heuristic steps
+aside (it is capped by the scanner's own OpenSSL) and the report says so — fewer
+hand-rolled heuristics means less to keep tuned.
 
 ## 📦 Install
 

@@ -70,7 +70,7 @@ def _scan_impl(target: str, authorized: bool, modules: list[str] | None,
                openapi: bool, openapi_spec: str | None, oob: str | None,
                cookie: str | None, headers: list[str] | None,
                login_url: str | None, login_data: str | None,
-               delay: float, max_pages: int) -> dict:
+               delay: float, max_pages: int, thorough: bool = False) -> dict:
     if not authorized:
         return {"error": "Refused: set authorized=true only for a target you own or "
                          "have explicit written permission to test."}
@@ -79,7 +79,7 @@ def _scan_impl(target: str, authorized: bool, modules: list[str] | None,
         time_based=time_based, active_auth=active_auth, oob=oob,
         cookie=cookie, header=headers or [], login_url=login_url, login_data=login_data,
         headless=headless, sqlmap=sqlmap, nuclei=nuclei, tls_audit=tls_audit,
-        openapi=openapi, openapi_spec=openapi_spec,
+        openapi=openapi, openapi_spec=openapi_spec, thorough=thorough,
         max_pages=max_pages, max_requests=6000, delay=delay,
         timeout=12.0, port_timeout=2.0, insecure=False, json=None,
     )
@@ -120,18 +120,21 @@ def scan(target: str, authorized: bool = False, modules: list[str] | None = None
          openapi: bool = False, openapi_spec: str | None = None,
          oob: str | None = None, cookie: str | None = None,
          headers: list[str] | None = None, login_url: str | None = None,
-         login_data: str | None = None, delay: float = 0.3, max_pages: int = 25) -> dict:
+         login_data: str | None = None, delay: float = 0.3, max_pages: int = 25,
+         thorough: bool = False) -> dict:
     """Run an AUTHORIZED web-security scan of a single target; return OWASP-tagged findings.
 
     Set authorized=true ONLY for a host the user owns or has written permission to test.
     modules: subset from list_modules() (default: all built-in checks). Opt-in heavy engines:
     set sqlmap/nuclei/tls_audit/headless true (and time_based/active_auth for intrusive probes).
+    thorough=true leans on every available engine at once (headless + sqlmap + nuclei + TLS
+    audit + OpenAPI fuzzing); when the TLS engine runs it supersedes the built-in cipher check.
     Authenticated scan: pass cookie, headers (["Name: Value", ...]), or login_url + login_data.
     Returns {target, counts, findings[], checks_clean[]}. Heuristic findings need manual review.
     """
     return _scan_impl(target, authorized, modules, time_based, active_auth, headless,
                       sqlmap, nuclei, tls_audit, openapi, openapi_spec, oob, cookie, headers,
-                      login_url, login_data, delay, max_pages)
+                      login_url, login_data, delay, max_pages, thorough)
 
 
 if __name__ == "__main__":

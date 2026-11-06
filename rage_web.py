@@ -96,6 +96,9 @@ PAGE = """<!doctype html>
       nuclei templates</label>
     &nbsp;&nbsp;<label style="display:inline;"><input type="checkbox" name="sqlmap" {sqlmap}>
       sqlmap confirm</label>
+    &nbsp;&nbsp;<label style="display:inline;" title="Enable headless + sqlmap + nuclei + TLS audit + OpenAPI fuzzing at once">
+      <input type="checkbox" name="thorough" {thorough}>
+      <strong>Thorough</strong> (lean on all engines)</label>
   </div>
   <div class="row"><label style="display:inline;">SSRF out-of-band URL (optional)
     <input type="text" name="oob" value="{oob}" placeholder="https://your-collaborator"
@@ -133,7 +136,7 @@ def _modules_html(selected) -> str:
 def render_page(target="", modules=None, time_based=False, delay="0.3",
                 authorized=False, results="", active_auth=False, oob="",
                 cookie="", login_url="", login_data="",
-                headless=False, sqlmap=False, nuclei=False):
+                headless=False, sqlmap=False, nuclei=False, thorough=False):
     return PAGE.format(
         target=html.escape(target, quote=True),
         modules_html=_modules_html(modules),
@@ -142,6 +145,7 @@ def render_page(target="", modules=None, time_based=False, delay="0.3",
         headless="checked" if headless else "",
         sqlmap="checked" if sqlmap else "",
         nuclei="checked" if nuclei else "",
+        thorough="checked" if thorough else "",
         oob=html.escape(oob, quote=True),
         cookie=html.escape(cookie, quote=True),
         login_url=html.escape(login_url, quote=True),
@@ -185,12 +189,13 @@ def render_results(report) -> str:
 
 def run_scan(target, modules, time_based, delay, active_auth=False, oob=None,
              cookie=None, login_url=None, login_data=None,
-             headless=False, sqlmap=False, nuclei=False) -> str:
+             headless=False, sqlmap=False, nuclei=False, thorough=False) -> str:
     args = argparse.Namespace(
         target=target, modules=modules or ["all"], authorized=True,
         time_based=time_based, active_auth=active_auth, oob=oob,
         cookie=cookie, header=[], login_url=login_url, login_data=login_data,
         headless=headless, sqlmap=sqlmap, nuclei=nuclei,
+        tls_audit=thorough, openapi=thorough, openapi_spec=None, thorough=thorough,
         max_pages=25, max_requests=6000, delay=delay,
         timeout=12.0, port_timeout=2.0, insecure=False, json=None,
     )
@@ -229,6 +234,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         headless = "headless" in form
         sqlmap = "sqlmap" in form
         nuclei = "nuclei" in form
+        thorough = "thorough" in form
         authorized = "authorized" in form
         try:
             delay = max(0.0, float(form.get("delay", ["0.3"])[0]))
@@ -238,14 +244,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         def page(results):
             return render_page(target, modules, time_based, str(delay), authorized, results,
                                active_auth, oob or "", cookie or "", login_url or "", login_data or "",
-                               headless, sqlmap, nuclei)
+                               headless, sqlmap, nuclei, thorough)
 
         if not authorized or not target:
             self._send(page("<p class='warn'>Confirm authorization and enter a target.</p>"))
             return
         try:
             results = run_scan(target, modules, time_based, delay, active_auth, oob,
-                               cookie, login_url, login_data, headless, sqlmap, nuclei)
+                               cookie, login_url, login_data, headless, sqlmap, nuclei, thorough)
         except Exception as e:
             results = f"<p class='warn'>Scan error: {html.escape(str(e))}</p>"
         self._send(page(results))

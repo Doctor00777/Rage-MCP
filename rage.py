@@ -1413,6 +1413,36 @@ CLEAN_DESCRIPTIONS = {
 }
 
 
+def _select_modules(args: argparse.Namespace) -> tuple[list[str], bool, list[Finding]]:
+    """Resolve the active module list from the requested modules plus convenience
+    flags. Pure (no I/O) so it can be unit-tested.
+
+    Returns (modules, headless, notes):
+      - --thorough turns on every available engine at once (headless crawl +
+        sqlmap + nuclei + TLS audit + OpenAPI fuzzing): "lean on the engines" as
+        a single switch.
+      - When the authoritative TLS engine (--tls-audit / tlsaudit) is active it
+        SUPERSEDES rage's limited built-in 'ciphers' heuristic, which is capped by
+        the scanner's own OpenSSL. The heuristic is dropped and an info note says so.
+    """
+    thorough = getattr(args, "thorough", False)
+    modules = list(DEFAULT_ALL if "all" in args.modules else args.modules)
+    for attr, mod in (("sqlmap", "sqlmap"), ("nuclei", "nuclei"),
+                      ("tls_audit", "tlsaudit"), ("openapi", "openapi")):
+        if (getattr(args, attr, False) or thorough) and mod not in modules:
+            modules.append(mod)
+    headless = getattr(args, "headless", False) or thorough
+    notes: list[Finding] = []
+    if "tlsaudit" in modules and "ciphers" in modules:
+        modules.remove("ciphers")
+        notes.append(Finding("ciphers", "info",
+                             "Built-in cipher check skipped (TLS-audit engine active)",
+                             "The external TLS engine supersedes rage's limited built-in cipher "
+                             "probe (capped by the scanner's own OpenSSL); trust the 'tlsaudit' "
+                             "findings for protocol/cipher issues.", "", owasp="A04"))
+    return modules, headless, notes
+
+
 def run(args: argparse.Namespace) -> Report:
     base_url = args.target
     if not base_url.startswith(("http://", "https://")):
@@ -1442,18 +1472,11 @@ def run(args: argparse.Namespace) -> Report:
     elif extra_headers.get("Cookie") or any(k.lower() == "authorization" for k in extra_headers):
         report.add(Finding("auth", "info", "Authenticated session (supplied credentials)",
                            "Scanning with the cookie/authorization header you provided.", base_url, owasp="A07"))
-    modules = list(DEFAULT_ALL if "all" in args.modules else args.modules)
-    if getattr(args, "sqlmap", False) and "sqlmap" not in modules:
-        modules.append("sqlmap")
-    if getattr(args, "nuclei", False) and "nuclei" not in modules:
-        modules.append("nuclei")
-    if getattr(args, "tls_audit", False) and "tlsaudit" not in modules:
-        modules.append("tlsaudit")
-    if getattr(args, "openapi", False) and "openapi" not in modules:
-        modules.append("openapi")
+    modules, headless, _sel_notes = _select_modules(args)
+    for _note in _sel_notes:
+        report.add(_note)
     oob = getattr(args, "oob", None)
     active_auth = getattr(args, "active_auth", False)
-    headless = getattr(args, "headless", False)
 
     param_urls: list[str] = []
     forms: list[Form] = []
@@ -1583,6 +1606,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nuclei", action="store_true", help="Run the nuclei template engine (must be on PATH).")
     p.add_argument("--tls-audit", action="store_true", dest="tls_audit",
                    help="Trustworthy TLS/cipher audit via sslyze or testssl.sh (own cipher stack).")
+    p.add_argument("--thorough", action="store_true",
+                   help="Lean on every available engine at once: headless crawl + sqlmap + nuclei "
+                        "+ TLS audit + OpenAPI fuzzing (engines must be installed; see --tool-status).")
     p.add_argument("--openapi", action="store_true",
                    help="Read the target's OpenAPI/Swagger spec and fuzz the documented API endpoints.")
     p.add_argument("--openapi-spec", metavar="URL", dest="openapi_spec",
