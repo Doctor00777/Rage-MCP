@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rage-mcp"
+dynamic = ["version"]
+description = "Authorized-only web security recon scanner (OWASP Top 10 2026) with a CLI, a local web UI, and an MCP server."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Doctor00777" }]
+keywords = ["security", "owasp", "scanner", "pentest", "recon", "web-security", "mcp", "appsec"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+]
+# The core scanner is stdlib-only — no runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+# Each extra enables an optional engine; install only what you need.
+mcp = ["mcp<2"]                 # MCP server (rage-mcp)
+headless = ["playwright>=1.40"] # headless Chromium crawl (--headless); then `playwright install chromium`
+tls = ["sslyze>=5"]             # trustworthy TLS/cipher audit (--tls-audit)
+all = ["mcp<2", "playwright>=1.40", "sslyze>=5"]
+
+[project.scripts]
+rage = "rage:main"
+rage-web = "rage_web:main"
+rage-mcp = "rage_mcp:main"
+
+[project.urls]
+Homepage = "https://github.com/Doctor00777/Rage-MCP"
+Repository = "https://github.com/Doctor00777/Rage-MCP"
+Issues = "https://github.com/Doctor00777/Rage-MCP/issues"
+
+[tool.setuptools]
+py-modules = ["rage", "rage_tools", "rage_web", "rage_mcp"]
+
+[tool.setuptools.dynamic]
+version = { attr = "rage.__version__" }

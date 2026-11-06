@@ -69,6 +69,8 @@ try:
 except Exception:
     rage_tools = None
 
+__version__ = "0.1.0"
+
 # --------------------------------------------------------------------------- #
 # Reporting
 # --------------------------------------------------------------------------- #
@@ -135,7 +137,7 @@ class HttpResponse:
 
 class Http:
     def __init__(self, timeout: float = 12.0, delay: float = 0.3,
-                 user_agent: str = "rage/3.1 (authorized-testing)",
+                 user_agent: str = f"rage/{__version__} (authorized-testing)",
                  verify_tls: bool = True, max_requests: int = 6000,
                  extra_headers: dict[str, str] | None = None):
         self.timeout = timeout
@@ -1584,6 +1586,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="rage",
         description="Authorized-only web security recon scanner (OWASP Top 10 2026 mapped).",
         epilog="Only scan systems you own or are explicitly authorized to test.")
+    p.add_argument("--version", action="version", version=f"rage {__version__}")
     p.add_argument("target", help="Target URL or domain (e.g. https://beta.example.com)")
     p.add_argument("-m", "--modules", nargs="+", default=["all"], choices=ALL_MODULES + ["all"],
                    help="Modules to run (default: all)")

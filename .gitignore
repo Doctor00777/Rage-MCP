@@ -6,6 +6,10 @@ __pycache__/
 venv/
 env/
 
+# Build artifacts
+build/
+dist/
+
 # rage output
 report.json
 *.report.json

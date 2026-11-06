@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a problem with rage itself (not a finding about some website).
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. **Do not paste scan output, cookies, tokens, or
+        traffic from a system you are not authorized to test.** Redact targets.
+  - type: input
+    id: version
+    attributes:
+      label: rage version
+      description: Output of `rage --version`.
+      placeholder: "rage 0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS and Python version (`python --version`).
+      placeholder: "Windows 11 / Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, what occurred instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s). Use a local/test target; redact real hosts.
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: authorized
+    attributes:
+      label: Authorization
+      options:
+        - label: This report contains no data from a system I am not authorized to test.
+          required: true

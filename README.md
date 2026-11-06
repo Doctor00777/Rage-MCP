@@ -8,6 +8,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Doctor00777/Rage-MCP/actions/workflows/tests.yml"><img src="https://github.com/Doctor00777/Rage-MCP/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/license-MIT-22c55e" alt="MIT License">
   <img src="https://img.shields.io/badge/OWASP-Top%2010%20(2026)-f59e0b" alt="OWASP Top 10 2026">
@@ -147,17 +148,36 @@ hand-rolled heuristics means less to keep tuned.
 
 ## 📦 Install
 
+The core scanner is stdlib-only (Python 3.9+). Install from PyPI — `pipx` is
+recommended so the `rage`, `rage-web`, and `rage-mcp` commands land on your PATH in
+an isolated environment:
+
+```bash
+pipx install rage-mcp          # or: pip install rage-mcp
+rage --version
+rage https://beta.example.com --authorized
+```
+
+Optional engines are pulled in via extras (install only what you need):
+
+```bash
+pip install "rage-mcp[mcp]"        # MCP server
+pip install "rage-mcp[headless]"   # headless Chromium crawl, then: playwright install chromium
+pip install "rage-mcp[tls]"        # trustworthy TLS audit (sslyze)
+pip install "rage-mcp[all]"        # everything above
+```
+
+External binaries (optional, must be on PATH): **nuclei · sqlmap · testssl.sh**.
+
+<details><summary>From source</summary>
+
 ```bash
 git clone https://github.com/Doctor00777/Rage-MCP.git
 cd Rage-MCP
-
-# The core scanner needs nothing beyond Python 3.9+.
-# Optional engines:
-pip install -r requirements.txt       # mcp, playwright, sslyze
-playwright install chromium           # only for the headless (JS/SPA) crawl
-
-# External binaries, optional, on PATH: nuclei · sqlmap · testssl.sh
+pip install -e ".[all]"        # or -e . for the stdlib core only
+python -m unittest discover -s tests   # run the test suite
 ```
+</details>
 
 ## ⚖️ Responsible use
 

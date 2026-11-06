@@ -1,0 +1,28 @@
+name: Feature request / new check
+description: Suggest a new module, engine integration, or improvement.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the gap?
+      description: What can't rage do today, or what does it get wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: The new check/flag/integration you have in mind.
+    validations:
+      required: true
+  - type: input
+    id: owasp
+    attributes:
+      label: OWASP category (if applicable)
+      placeholder: "A01 Broken Access Control"
+  - type: textarea
+    id: fp
+    attributes:
+      label: False-positive risk
+      description: How would we confirm this is real and not noisy? (Detection, not exploitation.)

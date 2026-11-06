@@ -137,5 +137,10 @@ def scan(target: str, authorized: bool = False, modules: list[str] | None = None
                       login_url, login_data, delay, max_pages, thorough)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point: start the stdio MCP server."""
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
