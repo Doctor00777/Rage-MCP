@@ -548,6 +548,18 @@ def module_tls(report: Report, base_url: str, timeout: float = 6.0) -> None:
             pass
 
 
+# Genuinely weak/broken cipher tokens. Modern suites must NOT match: TLS 1.3 names
+# (TLS_AES_*_GCM_*, TLS_CHACHA20_POLY1305_*) and strong 1.2 AEAD suites
+# (ECDHE-*-AES*-GCM-*) contain none of these — only legacy RC4/DES/3DES/MD5/NULL/
+# EXPORT/RC2 do. Keeping this as a named, importable helper lets a regression test
+# pin the exact behaviour (a TLS 1.3 handshake must never be flagged "weak").
+WEAK_CIPHER_RE = re.compile(r"RC4|3DES|DES-CBC|_DES_|MD5|NULL|EXPORT|RC2", re.IGNORECASE)
+
+
+def _is_weak_cipher(name: str) -> bool:
+    return bool(name) and bool(WEAK_CIPHER_RE.search(name))
+
+
 def module_ciphers(report: Report, base_url: str, timeout: float = 6.0) -> None:
     pr = urllib.parse.urlparse(base_url)
     if pr.scheme != "https":
@@ -565,11 +577,25 @@ def module_ciphers(report: Report, base_url: str, timeout: float = 6.0) -> None:
             with ctx.wrap_socket(sock, server_hostname=host) as ss:
                 name = ss.cipher()[0]
         # Only report if the negotiated suite is genuinely weak (defense in depth).
-        if re.search(r"RC4|3DES|DES-CBC|_DES_|MD5|NULL|EXPORT|RC2", name, re.IGNORECASE):
+        if _is_weak_cipher(name):
             report.add(Finding("ciphers", "high", "Weak cipher suite supported",
                                f"Server negotiated a weak cipher: {name}.", base_url, name, "A04"))
     except Exception:
         pass  # weak ciphers refused — good
+
+
+# A URL parameter whose NAME looks like it carries a credential/secret. Placing such
+# a value in a query string leaks it to logs/history/referrers.
+SENSITIVE_URL_PARAM_RE = re.compile(r"pass(word|wd)?|token|secret|api[_-]?key|session", re.IGNORECASE)
+# Signed-media/static-asset URLs legitimately carry access tokens in the query
+# string (CDN/media signatures), so they must NOT be flagged as "secrets in URL".
+# Named + importable so a regression test can pin the exemption.
+STATIC_ASSET_RE = re.compile(r"\.(?:png|jpe?g|gif|svg|ico|webp|bmp|css|js|mjs|woff2?|ttf|eot|map)(?:$|\?)",
+                             re.IGNORECASE)
+
+
+def _is_static_asset(url: str) -> bool:
+    return bool(STATIC_ASSET_RE.search(url))
 
 
 def module_mixed(report: Report, pages: list[Page], param_urls: list[str], base_url: str) -> None:
@@ -581,15 +607,11 @@ def module_mixed(report: Report, pages: list[Page], param_urls: list[str], base_
                 report.add(Finding("mixed", "medium", "Mixed content (HTTP resource on HTTPS page)",
                                    "Insecure sub-resource loaded over HTTP.", p.url, m.group(0)[:120], "A04"))
                 break
-    sensitive = re.compile(r"pass(word|wd)?|token|secret|api[_-]?key|session", re.IGNORECASE)
-    # Signed-media/static-asset URLs legitimately carry access tokens; don't flag those.
-    static_asset = re.compile(r"\.(?:png|jpe?g|gif|svg|ico|webp|bmp|css|js|mjs|woff2?|ttf|eot|map)(?:$|\?)",
-                              re.IGNORECASE)
     for url in param_urls:
-        if static_asset.search(url):
+        if _is_static_asset(url):
             continue
         for param in _params_of(url):
-            if sensitive.search(param):
+            if SENSITIVE_URL_PARAM_RE.search(param):
                 report.add(Finding("mixed", "medium", "Sensitive data in URL parameter",
                                    f"Parameter {param!r} may place secrets in URLs/logs/history.",
                                    url, owasp="A04"))
@@ -778,7 +800,7 @@ def module_xss(http: Http, report: Report, param_urls: list[str], forms: list[Fo
                 report.add(Finding("xss", "high", "Reflected XSS (unescaped marker)",
                                    f"Payload reflected unencoded for param {param!r}.",
                                    f"{url} [param={param}]", XSS_PAYLOAD, "A05"))
-            elif r and XSS_MARKER in r.body:
+            elif _is_html(r) and XSS_MARKER in r.body:
                 report.add(Finding("xss", "medium", "Input reflected (encoded) — review context",
                                    f"Marker reflected for param {param!r}; brackets encoded.",
                                    f"{url} [param={param}]", owasp="A05"))
