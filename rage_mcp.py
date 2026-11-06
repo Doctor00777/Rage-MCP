@@ -11,13 +11,18 @@ Run it directly, or wire it into an MCP client:
 
     py rage_mcp.py            # starts a stdio MCP server
 
-Claude Desktop (claude_desktop_config.json):
+Claude Desktop (claude_desktop_config.json) — use an absolute path to this file:
     {
       "mcpServers": {
         "rage": { "command": "py",
-                  "args": ["C:/Users/mahat/PentestGPT/websec_scanner/rage_mcp.py"] }
+                  "args": ["/absolute/path/to/Rage-MCP/rage_mcp.py"] }
       }
     }
+
+Claude Code:
+    claude mcp add rage --scope user -- py /absolute/path/to/Rage-MCP/rage_mcp.py
+
+(On Windows the launcher is usually "py"; elsewhere use "python3".)
 
 Requires the MCP SDK:  pip install "mcp<2"
 USE ONLY ON SYSTEMS YOU OWN OR ARE EXPLICITLY AUTHORIZED TO TEST.
